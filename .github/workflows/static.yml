@@ -1,43 +1,164 @@
-# Simple workflow for deploying static content to GitHub Pages
-name: Deploy static content to Pages
+ <!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Controle Financeiro - Bruno & Nina</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
-on:
-  # Runs on pushes targeting the default branch
-  push:
-    branches: ["main"]
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #f4f4f4;
+  padding: 10px;
+  max-width: 600px;
+  margin: auto;
+}
+h1 { text-align: center; }
+input, select, button {
+  width: 100%;
+  padding: 8px;
+  margin-top: 6px;
+}
+.resumo, .regra {
+  background: #fff;
+  padding: 10px;
+  margin-top: 10px;
+  border-radius: 6px;
+}
+ul { list-style: none; padding: 0; }
+li {
+  background: #fff;
+  padding: 8px;
+  margin-top: 5px;
+  display: flex;
+  justify-content: space-between;
+}
+small { color: #666; }
+</style>
+</head>
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
+<body>
+<h1>💰 Bruno & Nina</h1>
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+<select id="mes"></select>
+<select id="pessoa">
+  <option value="Todos">Todos</option>
+  <option value="Bruno">Bruno</option>
+  <option value="Nina">Nina</option>
+</select>
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
+<input id="texto" placeholder="Ex: Mercado 420 / Nina">
+<button id="btnAdd">Adicionar</button>
+<button id="btnFixos">Lançar contas fixas</button>
 
-jobs:
-  # Single deploy job since we're just deploying
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          # Upload entire repository
-          path: '.'
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+<div class="resumo">
+  <p>Receitas: R$ <span id="r">0</span></p>
+  <p>Despesas: R$ <span id="d">0</span></p>
+  <p><b>Saldo: R$ <span id="s">0</span></b></p>
+</div>
+
+<div class="regra">
+  <p>50% Necessidades: R$ <span id="n50">0</span></p>
+  <p>30% Desejos: R$ <span id="d30">0</span></p>
+  <p>20% Reserva: R$ <span id="r20">0</span></p>
+</div>
+
+<ul id="lista"></ul>
+
+<script>
+const $ = id => document.getElementById(id);
+
+let dados = JSON.parse(localStorage.getItem("dadosFinanceiros")) || [];
+
+const contasFixas = [
+  ["Corsan Casa10",0],["Ceee Casa10",0],["Internet Osirnet",0],
+  ["CEEE Casinha",0],["Corsan Casinha",0],
+  ["Cartão Nubank",0],["Cartão Santander",0],
+  ["Carro Kwid",1669.21],["Escola Filha",1050]
+];
+
+function meses() {
+  for(let i=-12;i<=12;i++){
+    const d = new Date();
+    d.setMonth(d.getMonth()+i);
+    const opt = document.createElement("option");
+    opt.value = d.toISOString().slice(0,7);
+    opt.text = d.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+    $("mes").appendChild(opt);
+  }
+  $("mes").value = new Date().toISOString().slice(0,7);
+}
+
+function categoria(txt){
+  if(/sal[aá]rio/.test(txt)) return "Receita";
+  if(/mercado|super/.test(txt)) return "Alimentação";
+  if(/uber|gasolina/.test(txt)) return "Transporte";
+  if(/bar|cinema/.test(txt)) return "Lazer";
+  if(/farm[aá]cia|m[eé]dico/.test(txt)) return "Saúde";
+  return "Despesas Fixas";
+}
+function grupo(cat){
+  if(cat==="Lazer") return "d";
+  if(cat==="Receita") return "r";
+  return "n";
+}
+
+function salvar(){localStorage.setItem("dadosFinanceiros",JSON.stringify(dados));}
+
+function render(){
+  $("lista").innerHTML="";
+  let r=0,d=0,n={n:0,d:0,r:0};
+  const mes=$("mes").value, p=$("pessoa").value;
+
+  dados.filter(l=>l.mes===mes && (p==="Todos"||l.pessoa===p))
+  .forEach((l,i)=>{
+    l.tipo==="receita"?r+=l.valor:d+=l.valor;
+    n[grupo(l.cat)] += l.valor;
+    const li=document.createElement("li");
+    li.innerHTML=`
+      <div>${l.txt} - R$ ${l.valor.toFixed(2)}
+      <small>${l.cat} | ${l.pessoa}</small></div>
+      <button onclick="remover(${i})">❌</button>`;
+    $("lista").appendChild(li);
+  });
+
+  $("r").innerText=r.toFixed(2);
+  $("d").innerText=d.toFixed(2);
+  $("s").innerText=(r-d).toFixed(2);
+  $("n50").innerText=n.n.toFixed(2);
+  $("d30").innerText=n.d.toFixed(2);
+  $("r20").innerText=n.r.toFixed(2);
+}
+
+function adicionar(){
+  const t=$("texto").value.toLowerCase();
+  const m=t.match(/(\d+(\.\d+)?)/);
+  if(!m) return alert("Informe um valor.");
+  dados.push({
+    txt:t,
+    valor:Number(m[1]),
+    pessoa:t.includes("/ nina")?"Nina":"Bruno",
+    cat:categoria(t),
+    tipo:categoria(t)==="Receita"?"receita":"despesa",
+    mes:$("mes").value
+  });
+  $("texto").value="";
+  salvar(); render();
+}
+
+function remover(i){dados.splice(i,1);salvar();render();}
+
+$("btnAdd").onclick=adicionar;
+$("btnFixos").onclick=()=>{
+  contasFixas.forEach(c=>dados.push({
+    txt:c[0],valor:c[1],pessoa:"Bruno",
+    cat:"Despesas Fixas",tipo:"despesa",mes:$("mes").value
+  }));
+  salvar();render();
+};
+
+meses(); render();
+</script>
+</body>
+</html>
+     
